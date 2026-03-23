@@ -3,7 +3,7 @@
 *Accurate Range+CSI on the ESP32 using Multipath Compensation*
 
 
-![Wi-PRO is a system for getting high-accuracy, low-bias indoor range estimation on the ESP32.](assets/screenshot.png)
+![Wi-PRO is a system for getting high-accuracy, low-bias indoor range estimation on the ESP32.](images/banner.png)
 
 
 # Building
@@ -67,3 +67,11 @@ On linux the esp32-s3 will usually be assigned `/dev/ttyACM0`, on MacOS it usual
 ```
 
 The ESP32 dumps raw CSI and FTM data over the USB, so we have built a small host binary `controller` which decodes this data and stores it in `csv` files for easy processing. It can also send data to a remote server via ZMQ, for aggregation of data from multiple ESPs together.
+
+Once the ESP32 is flashed, you can connect to it by running
+
+```
+./controller/controller -p /dev/ttyACM0
+```
+
+Optionally, add `-o data` to save outputs in a folder called `data`. If the folder is non-empty, controller will create a unique subfolder to ensure you don't overwrite existing log files.
