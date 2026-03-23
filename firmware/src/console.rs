@@ -56,7 +56,7 @@ async fn handle_command(cmd: &str, args: &str) {
             info!("  stats    - Show ESP-NOW statistics");
             info!("  id       - Show device MAC address");
             info!("  mute <1|0> - enable/disable FTM requests");
-            info!("  beacon   - Beacon to peer (call with no args to disable)");
+            info!("  beacon <ms>  - Set UDP beaconing period in milliseconds");
             info!("  interval <ms> - Set FTM request interval in milliseconds");
             info!("  promi <1|0> - enable promiscuous mode");
             info!("  channel <ch>/<bw> - Set WiFi channel (e.g., channel 6/40)");

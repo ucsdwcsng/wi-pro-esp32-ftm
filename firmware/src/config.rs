@@ -10,7 +10,7 @@ pub struct Config {
 
 pub static CONFIG: Mutex<CriticalSectionRawMutex, RefCell<Config>> =
     Mutex::new(RefCell::new(Config {
-        softap_prefix: "ESP_LOCALIZATION_TEST",
+        softap_prefix: "WI_PRO",
         promi_en: false,
         contact_interval_ms: 5000,
     }));
