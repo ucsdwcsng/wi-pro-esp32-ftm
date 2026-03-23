@@ -1,0 +1,76 @@
+[package]
+name = "firmware"
+version = "0.1.0"
+authors = ["wshunter <whunter554@gmail.com>"]
+edition = "2021"
+resolver = "2"
+rust-version = "1.77"
+
+[[bin]]
+name = "firmware"
+harness = false # do not use the built-in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+debug = true
+opt-level = "s"
+
+[profile.dev]   
+debug = true    # Symbols are nice, and they don't increase the size on Flash
+opt-level = "z"
+
+[features]
+default = []
+
+experimental = ["esp-idf-svc/experimental"]
+
+[dependencies]
+log = "0.4"
+
+# --- Optional Embassy Integration ---
+# esp-idf-svc = { version = "0.51", features = ["embassy-time-driver", "embassy-sync"] }
+
+# If you enable embassy-time-driver, you MUST also add one of:
+
+# a) Standalone Embassy libs ( embassy-time, embassy-sync etc.) with a foreign async runtime:
+embassy-time = { version = "0.5.0" } # NOTE: any generic-queue variant will work
+embassy-sync = { version = "0.7.2" }
+embassy-futures = { version = "0.1.2" }
+
+# b) With embassy-executor:
+embassy-executor = { version = "0.9", features = ["executor-thread", "arch-std"] }
+
+# NOTE: if you use embassy-time with embassy-executor you don't need the generic-queue-8 feature
+
+# --- Temporary workaround for embassy-executor < 0.8 ---
+#esp-idf-svc = { version = "0.51", features = ["embassy-time-driver", "embassy-sync"] }
+#esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git", branch = "master", features = ["embassy-time-driver", "embassy-sync"] }
+esp-idf-svc = { version = "0.52.1", features = ["embassy-time-driver", "embassy-sync"]}
+
+
+
+critical-section = { version = "1.1", features = ["std"], default-features = false }
+
+static_cell = "2.1"
+base64 = { version = "0.22", default-features = false}
+heapless = "0.9"
+libc = { version = "0.2", default-features = false }
+#smart-leds = "0.4.0"
+#ws2812-esp32-rmt-driver = "*"
+anyhow = "1.0.100"
+portable-atomic = { version = "*" }
+num-complex = "0.4.6"
+nalgebra = "0.33.2"
+
+[build-dependencies]
+embuild = "0.33"
+cc = "1.2.56"
+
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp-dsp", version = "1.0" }
+bindings_header = "src/bindings.h"
+
+#[patch.crates-io]
+#esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys.git", branch = "master" }
+#esp-idf-hal = { git = "https://github.com/esp-rs/esp-idf-hal.git", branch = "master" }
+#esp-idf-svc = { git = "https://github.com/esp-rs/esp-idf-svc.git", branch = "master" }
+#embedded-svc = { git = "https://github.com/ivmarkov/embedded-svc.git", branch = "master" }
