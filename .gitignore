@@ -1,0 +1,9 @@
+**/*~
+firmware/target
+firmware/bin/*
+firmware/data/*
+firmware/Cargo.lock
+controller/Cargo.lock
+controller/target
+controller/controller
+controller/server
