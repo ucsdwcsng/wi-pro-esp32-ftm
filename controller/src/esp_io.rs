@@ -177,8 +177,6 @@ fn handle_message(msg: Vec<&[u8]>, out_files: &mut Option<OutputFiles>) -> Optio
         return None;
     };
 
-    println!("GOT {}", msg_type);
-
     let event_result: Result<tlv::ESPEvent, String> = match msg_type.as_ref() {
         "CSI"     => tlv::parse_csi(msg, own_mac, host_time_ms).map(tlv::ESPEvent::CSI),
         "FTM"     => tlv::parse_ftm(msg, own_mac, host_time_ms).map(tlv::ESPEvent::FTM),

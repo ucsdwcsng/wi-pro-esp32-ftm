@@ -17,12 +17,14 @@ use log::{info, warn};
 pub struct FtmState {
     pub mute: bool,
     pub num_burst: i32,
+    pub estimate_range: bool,
 }
 
 pub static FTM_STATE: Mutex<CriticalSectionRawMutex, FtmState> =
     Mutex::new(FtmState {
 	mute: true,
-	num_burst: 16
+	num_burst: 16,
+	estimate_range: false
     });
 
 #[derive(Clone, Copy, Debug)]
@@ -357,4 +359,10 @@ pub async fn set_burst(num_burst: i32) {
     } else {
 	info!("Must set burst count to <16|24|32|64>");
     }
+}
+
+pub async fn set_run_wipro(run: bool) {
+    let mut state = FTM_STATE.lock().await;
+    state.estimate_range = run;
+    info!("Run Wi-PRO: {}", state.estimate_range);
 }

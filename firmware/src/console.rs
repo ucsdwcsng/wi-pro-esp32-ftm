@@ -61,6 +61,7 @@ async fn handle_command(cmd: &str, args: &str) {
             info!("  promi <1|0> - enable promiscuous mode");
             info!("  channel <ch>/<bw> - Set WiFi channel (e.g., channel 6/40)");
 	    info!("  burst <16|25|32|64> - Set number of FTMs to be sent");
+	    info!("  wipro <1|0> - run Wi-PRO on-chip");
         }
         "peers" => {
             peers::print_all_peers().await;
@@ -219,6 +220,15 @@ async fn handle_command(cmd: &str, args: &str) {
             }
 
 	}
+	"wipro" => {
+	    if args.is_empty() {
+	    } else {
+		if let Ok(run) = args.parse::<u32>(){
+		    crate::ftm::set_run_wipro(run != 0).await;
+		}
+	    }
+        }
+
         "" => {
             // Empty line, ignore
         }
