@@ -20,6 +20,7 @@ pub struct OutputFiles {
     pub ftm_file: File,
     pub csi_file: File,
     pub dbg_file: File,
+    pub range_file: File,
 }
 
 pub async fn connect_serial(port_name: String, output_path: Option<PathBuf>) -> (mpsc::Sender<String>, mpsc::Receiver<tlv::ESPEvent>, tokio::task::JoinHandle<()>, tokio::task::JoinHandle<()> ) {
@@ -35,6 +36,7 @@ pub async fn connect_serial(port_name: String, output_path: Option<PathBuf>) -> 
                 ftm_file: File::create(output_path.join("ftm.csv")).unwrap(),
                 csi_file: File::create(output_path.join("csi.csv")).unwrap(),
 		dbg_file: File::create(output_path.join("dbg.csv")).unwrap(),
+                range_file: File::create(output_path.join("range.csv")).unwrap(),
             })
         } else {
             None
@@ -181,6 +183,7 @@ fn handle_message(msg: Vec<&[u8]>, out_files: &mut Option<OutputFiles>) -> Optio
         "CSI"     => tlv::parse_csi(msg, own_mac, host_time_ms).map(tlv::ESPEvent::CSI),
         "FTM"     => tlv::parse_ftm(msg, own_mac, host_time_ms).map(tlv::ESPEvent::FTM),
         "DBG"     => tlv::parse_dbg(msg, own_mac, host_time_ms).map(tlv::ESPEvent::DBG),
+        "RANGE"   => tlv::parse_range(msg, own_mac, host_time_ms).map(tlv::ESPEvent::Range),
         _         => return None,
     };
 
@@ -203,7 +206,8 @@ pub fn write_event(event: &tlv::ESPEvent, out_files: &mut OutputFiles) -> std::i
     let file = match event {
         tlv::ESPEvent::CSI(_)     => &mut out_files.csi_file,
         tlv::ESPEvent::FTM(_)     => &mut out_files.ftm_file,
-	tlv::ESPEvent::DBG(_) => &mut out_files.dbg_file
+	tlv::ESPEvent::DBG(_)     => &mut out_files.dbg_file,
+        tlv::ESPEvent::Range(_)   => &mut out_files.range_file,
     };
 
     for line in event.to_csv() {

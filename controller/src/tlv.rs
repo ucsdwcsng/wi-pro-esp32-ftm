@@ -49,13 +49,22 @@ pub struct DBGEvent {
     pub payload_b64: String
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RangeEvent {
+    pub t_ms: u64,
+    pub own_mac: String,
+    pub tgt_mac: String,
+    pub timestamp: u64,
+    pub range: f32,
+}
 
 // Enum to hold either event type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ESPEvent {
     CSI(CSIEvent),
     FTM(FTMEvent),
-    DBG(DBGEvent)
+    DBG(DBGEvent),
+    Range(RangeEvent),
 }
 
 pub fn parse_ftm(msg: Vec<&[u8]>, own_mac: &str, t_ms: u64) -> Result<FTMEvent, String> {
@@ -296,6 +305,40 @@ pub fn parse_dbg(msg: Vec<&[u8]>, own_mac: &str, _t_ms: u64) -> Result<DBGEvent,
     })
 }
 
+pub fn parse_range(msg: Vec<&[u8]>, own_mac: &str, t_ms: u64) -> Result<RangeEvent, String> {
+    if msg.len() != 4 {
+        return Err(format!(
+            "Invalid RANGE message: expected 4 fields, got {}",
+            msg.len()
+        ));
+    }
+
+    let tgt_mac = str::from_utf8(msg[1])
+        .map_err(|e| format!("Invalid UTF-8 in tgt_mac: {}", e))?
+        .trim()
+        .to_string();
+
+    let timestamp = str::from_utf8(msg[2])
+        .map_err(|e| format!("Invalid UTF-8 in timestamp: {}", e))?
+        .trim()
+        .parse::<u64>()
+        .map_err(|e| format!("Invalid timestamp: {}", e))?;
+
+    let range = str::from_utf8(msg[3])
+        .map_err(|e| format!("Invalid UTF-8 in range: {}", e))?
+        .trim()
+        .parse::<f32>()
+        .map_err(|e| format!("Invalid range: {}", e))?;
+
+    Ok(RangeEvent {
+        t_ms,
+        own_mac: own_mac.to_string(),
+        tgt_mac,
+        timestamp,
+        range,
+    })
+}
+
 pub fn parse(line: &str) -> Option<Vec<&[u8]>> {
     let bytes = line.as_bytes();
 
@@ -360,6 +403,19 @@ impl DBGEvent {
     }
 }
 
+impl RangeEvent {
+    pub fn to_csv(&self) -> String {
+        format!(
+            "{},{},{},{},{}\n",
+            self.t_ms,
+            self.own_mac,
+            self.tgt_mac,
+            self.timestamp,
+            self.range,
+        )
+    }
+}
+
 
 impl ESPEvent {
     pub fn to_csv(&self) -> Vec<String> {
@@ -367,6 +423,7 @@ impl ESPEvent {
             ESPEvent::CSI(csi) => vec![csi.to_csv()],
             ESPEvent::FTM(ftm) => ftm.to_csv(),
 	    ESPEvent::DBG(dbg) => vec![dbg.to_csv()],
+            ESPEvent::Range(range) => vec![range.to_csv()],
         }
     }
     pub fn id_str(&self) -> String {
@@ -374,6 +431,7 @@ impl ESPEvent {
             ESPEvent::CSI(_) => "CSI".to_string(),
             ESPEvent::FTM(_) => "FTM".to_string(),
 	    ESPEvent::DBG(_) => "DBG".to_string(),
+            ESPEvent::Range(_) => "RANGE".to_string(),
         }
     }
 }

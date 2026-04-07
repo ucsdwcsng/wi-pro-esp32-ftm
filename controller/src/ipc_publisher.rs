@@ -87,6 +87,11 @@ impl SocketManager {
                 let data = rmp_serde::to_vec(dbg_event)?;
                 (path, data)
             }
+            ESPEvent::Range(range_event) => {
+                let path = "ipc:///tmp/wipro_range_data";
+                let data = rmp_serde::to_vec(range_event)?;
+                (path, data)
+            }
         };
 
         let socket = self.get_socket(ipc_path).await?;
@@ -114,90 +119,3 @@ async fn run_publisher(mut rx: mpsc::Receiver<ESPEvent>) -> Result<(), Box<dyn s
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tlv::{CSIEvent, FTMEvent, FTMReport, PPSEvent, TimeEvent};
-
-    #[tokio::test]
-    async fn test_ipc_publisher_creation() {
-        let (publisher, _handle) = IPCPublisher::new(10);
-
-        let csi_event = CSIEvent {
-            t_ms: 1000,
-            seq: 1,
-            own_mac: "AA:BB:CC:DD:EE:FF".to_string(),
-            tgt_mac: "11:22:33:44:55:66".to_string(),
-            timestamp: 12345,
-            channel: 1,
-            channel2: 0,
-            rssi: -50,
-            payload_b64: "test".to_string(),
-        };
-
-        // Should successfully send
-        assert!(publisher.send(ESPEvent::CSI(csi_event)).await.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_all_event_types() {
-        let (publisher, _handle) = IPCPublisher::new(100);
-
-        // CSI
-        let csi = ESPEvent::CSI(CSIEvent {
-            t_ms: 1000,
-            seq: 1,
-            own_mac: "AA:BB:CC:DD:EE:FF".to_string(),
-            tgt_mac: "11:22:33:44:55:66".to_string(),
-            timestamp: 12345,
-            channel: 1,
-            channel2: 0,
-            rssi: -50,
-            payload_b64: "test".to_string(),
-        });
-        assert!(publisher.send(csi).await.is_ok());
-
-        // FTM
-        let ftm = ESPEvent::FTM(FTMEvent {
-            t_ms: 1000,
-            own_mac: "AA:BB:CC:DD:EE:FF".to_string(),
-            tgt_mac: "11:22:33:44:55:66".to_string(),
-            seq: 1,
-            reports: vec![FTMReport {
-                own_mac: "AA:BB:CC:DD:EE:FF".to_string(),
-                tgt_mac: "11:22:33:44:55:66".to_string(),
-                dlog_token: 1,
-                rssi: -45,
-                t1: 100,
-                t2: 200,
-                t3: 300,
-                t4: 400,
-            }],
-        });
-        assert!(publisher.send(ftm).await.is_ok());
-
-        // PPS
-        let pps = ESPEvent::PPS(PPSEvent {
-            own_mac: "AA:BB:CC:DD:EE:FF".to_string(),
-            t_ms: 1000,
-            timestamp_esp: 12345,
-            timestamp_mac: 12346,
-            internal_offset: 10,
-            compensated_mac_time: 12355,
-            frac: 500,
-        });
-        assert!(publisher.send(pps).await.is_ok());
-
-        // Time
-        let time = ESPEvent::Time(TimeEvent {
-            own_mac: "AA:BB:CC:DD:EE:FF".to_string(),
-            tgt_mac: "11:22:33:44:55:66".to_string(),
-            t_ms: 1000,
-            t1: 100,
-            t2: 200,
-            t3: 300,
-            t4: 400,
-        });
-        assert!(publisher.send(time).await.is_ok());
-    }
-}

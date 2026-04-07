@@ -119,7 +119,6 @@ pub async fn initiate_ftm(peer_bssid: [u8; 6], channel: u8, n_ftm: i32) -> Resul
         let result = esp_idf_sys::esp_wifi_ftm_initiate_session(&raw mut FTM_CFG as *mut _);
 
         if result == esp_idf_sys::ESP_OK {
-	    info!("init ftm, wait for radio done.");
 	    FTM_RADIO_DONE.wait().await;
 	    #[allow(static_mut_refs)]
 	    let report = if let Some(metadata) = FTM_REPORT_METADATA.take() {
@@ -146,11 +145,13 @@ pub async fn initiate_ftm(peer_bssid: [u8; 6], channel: u8, n_ftm: i32) -> Resul
 		warn!("couldn't find FTM report metadata");
 		return Err(1);
 	    };
-
-	    process_report(&report).await;
+	    
+	    let run_wipro = FTM_STATE.lock().await.estimate_range;
+	    if run_wipro {
+		process_report(&report).await;
+	    }
 	    
             //get peer
-	    info!("FTM BUF LEN {}", MAX_FTM_BUF_LEN);
             let peer_list = PEER_LIST.lock().await;
             if let Some(peer) = peer_list.find_by_bssid(&report.meta.peer_mac) {
                 let _ = send_ftm_notification(
@@ -158,14 +159,12 @@ pub async fn initiate_ftm(peer_bssid: [u8; 6], channel: u8, n_ftm: i32) -> Resul
                     peer.ftm_stats.seq,
                     peer.ftm_stats.should_init,
                 );
-		info!("Send FTM notification!")
             } else {
                 // we FTM'ed a peer we don't know about? Shouldn't happen.
 		info!("FTM'd peer not in list!")
             }
             drop(peer_list);
 
-	    info!("start dump, free heap {}", esp_idf_sys::esp_get_free_heap_size());
 	    msg_buffer.clear();
 	    use core::fmt::Write;
 	    let _ = write!(msg_buffer,
@@ -205,7 +204,6 @@ pub async fn initiate_ftm(peer_bssid: [u8; 6], channel: u8, n_ftm: i32) -> Resul
 	    drop(base64_buffer);
 	    dump_csi_buf(true).await;
 	    print!("\x03\r\n");
-	    info!("Done with dump.");
 	    
             Ok(())
         } else {

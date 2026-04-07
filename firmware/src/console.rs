@@ -62,6 +62,7 @@ async fn handle_command(cmd: &str, args: &str) {
             info!("  channel <ch>/<bw> - Set WiFi channel (e.g., channel 6/40)");
 	    info!("  burst <16|25|32|64> - Set number of FTMs to be sent");
 	    info!("  wipro <1|0> - run Wi-PRO on-chip");
+	    info!("  wipro_iters <iters> - run <iters> steps of l1 interpolation, set 0 to disable.");
         }
         "peers" => {
             peers::print_all_peers().await;
@@ -225,6 +226,14 @@ async fn handle_command(cmd: &str, args: &str) {
 	    } else {
 		if let Ok(run) = args.parse::<u32>(){
 		    crate::ftm::set_run_wipro(run != 0).await;
+		}
+	    }
+        }
+	"wipro_iters" => {
+	    if args.is_empty() {
+	    } else {
+		if let Ok(iters) = args.parse::<u32>(){
+		    crate::wipro::set_l1_iters(iters).await;
 		}
 	    }
         }
