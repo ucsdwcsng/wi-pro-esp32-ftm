@@ -22,7 +22,7 @@ pub struct WiproState {
 
 pub static WIPRO_STATE: Mutex<CriticalSectionRawMutex, WiproState> =
     Mutex::new(WiproState {
-	num_l1_iters: 0
+	num_l1_iters: 3
     });
 
 
@@ -225,12 +225,12 @@ const Z_IDX_40: [usize; 114] = [2,   3,   4,   5,   6,   7,   8,   9,  10,  11, 
 
 async fn l1_interp(h: &mut HVec40) {
     let iters = WIPRO_STATE.lock().await.num_l1_iters;
+
     let mut eps = Complex::new(1e-1f32, 0.0f32);
     let mut iter = 0;
     let mut fail = 0;
     let mut loss = std::f32::INFINITY;
     while iter < iters {
-	info!("iter {}",iter);
 	let mut sgn_ax = ifft_ortho(h);
 	for ji in 0..128 {
 	    let _nrm = sgn_ax[ji].norm() + 1e-9;
@@ -336,7 +336,7 @@ pub async fn process_report(report: &FtmReport) {
 	};
 
 	let Some(mut h) = load_h_40(csi_entry) else {continue};
-	l1_interp(&mut h);
+	l1_interp(&mut h).await;
 	let rtt_ps = diff_48bit(ftm_entry.t4 as i64, ftm_entry.t1 as i64) - 
 	    diff_48bit(ftm_entry.t3 as i64, ftm_entry.t2 as i64);
 	shift_to_zero(&mut h, rtt_ps);
