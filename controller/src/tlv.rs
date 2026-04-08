@@ -176,7 +176,9 @@ pub fn parse_ftm(msg: Vec<&[u8]>, own_mac: &str, t_ms: u64) -> Result<FTMEvent, 
 	}
 	ii += 5;
     }
-
+    
+    ftm_reports.retain(|f| !f.payload_b64.is_empty());
+    
     Ok(FTMEvent {
         t_ms,
         own_mac: own_mac.to_string(),
