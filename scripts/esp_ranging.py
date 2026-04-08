@@ -156,7 +156,7 @@ def optimal_interp_edges(h, iters=20):
 
 def normalize_csi_40(h, stitching='l1_edges',iters=20):
     h_interp = np.zeros_like(h)
-    elif stitching == 'l1_edges':
+    if stitching == 'l1_edges':
         for hi in tqdm.trange(h.shape[0]):
             h_ = np.copy(h[hi,:])
             h_[64:] *= np.exp(1.0j*np.pi/2)

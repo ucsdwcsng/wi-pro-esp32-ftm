@@ -54,7 +54,8 @@ async fn run_server(
                 raw_file: File::create(output_path.join("raw.dat")).unwrap(),
                 ftm_file: File::create(output_path.join("ftm.csv")).unwrap(),
                 csi_file: File::create(output_path.join("csi.csv")).unwrap(),
-		dbg_file: File::create(output_path.join("dbg.csv")).unwrap()
+		dbg_file: File::create(output_path.join("dbg.csv")).unwrap(),
+		range_file: File::create(output_path.join("range.csv")).unwrap(),
             })
         } else {
             None

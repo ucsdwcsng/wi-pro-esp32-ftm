@@ -3,6 +3,8 @@ use crate::ftm::FtmReport;
 use crate::csi::{FTM_CSI_STATE, CsiData};
 use esp_idf_svc::sys as esp_idf_sys;
 use log::info;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_sync::mutex::Mutex;
 use nalgebra::{SVector,DMatrix};
 use num_complex::Complex;
 
@@ -13,6 +15,15 @@ static FFT_INIT: std::sync::Once = std::sync::Once::new();
 extern "C" {
     static mut dsps_fft_w_table_fc32: *mut f32;
 }
+
+pub struct WiproState {
+    pub num_l1_iters: u32
+}
+
+pub static WIPRO_STATE: Mutex<CriticalSectionRawMutex, WiproState> =
+    Mutex::new(WiproState {
+	num_l1_iters: 6
+    });
 
 
 pub struct CompressedIdft {
@@ -126,7 +137,6 @@ pub fn fft_init() {
 
 fn load_h_40(entry: &CsiData) -> Option<Box<HVec40>> {
     let mut h = Box::new(SVector::<Complex<f32>, 128>::zeros());
-    info!("H has size {}", entry.len);
     if entry.len != 384 {return None;}
     for ii in 0..128 {
         let imag = (entry.buf[128 + 2 * ii] as i8) as f32;
@@ -213,9 +223,10 @@ const Z_IDX_40: [usize; 114] = [2,   3,   4,   5,   6,   7,   8,   9,  10,  11, 
 				104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116,
 				117, 118, 119, 120, 121, 122, 123, 124, 125, 126];
 
-fn l1_interp(h: &mut HVec40) {
-    let iters = 3;
-    let mut eps = Complex::new(1e-1f32, 0.0f32);
+async fn l1_interp(h: &mut HVec40) {
+    let iters = WIPRO_STATE.lock().await.num_l1_iters;
+
+    let mut eps = Complex::new(5e-3f32, 0.0f32);
     let mut iter = 0;
     let mut fail = 0;
     let mut loss = std::f32::INFINITY;
@@ -301,11 +312,7 @@ pub async fn process_report(report: &FtmReport) {
         state.buffer.clone()   // or core::mem::take if you want to drain it here
     };
 
-    info!(
-        "n_ftm {} n_csi {}",
-        report.meta.num_entries,
-        csi_entries.len()
-    );
+    let mut mean_range: f32 = 0.0;
 
     for ii in 0..report.meta.num_entries as usize {
 	let ftm_entry = report.entries[ii];
@@ -329,14 +336,27 @@ pub async fn process_report(report: &FtmReport) {
 	};
 
 	let Some(mut h) = load_h_40(csi_entry) else {continue};
-	l1_interp(&mut h);
+	l1_interp(&mut h).await;
 	let rtt_ps = diff_48bit(ftm_entry.t4 as i64, ftm_entry.t1 as i64) - 
 	    diff_48bit(ftm_entry.t3 as i64, ftm_entry.t2 as i64);
 	shift_to_zero(&mut h, rtt_ps);
 	let idft = get_or_init_idft();
 	let cir = apply_idft(idft, &h);
 	let range = estimate_range(&cir,idft);
-	info!("Final range {}", range);
+	mean_range += range;
+	print!(
+	    "\x02RANGE\x01{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}\x01{}\x01{}\x03\r\n",
+	    report.meta.peer_mac[0], report.meta.peer_mac[1], report.meta.peer_mac[2],
+	    report.meta.peer_mac[3], report.meta.peer_mac[4], report.meta.peer_mac[5],
+	    ftm_entry.t2,
+	    range
+	);
+    }
+    if report.meta.num_entries > 0 {
+	info!("{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}: {} meters",
+	      report.meta.peer_mac[0], report.meta.peer_mac[1], report.meta.peer_mac[2],
+	      report.meta.peer_mac[3], report.meta.peer_mac[4], report.meta.peer_mac[5],
+	      mean_range / report.meta.num_entries as f32);
     }
 }
 
@@ -370,4 +390,10 @@ pub fn _dump_debug_fc32(data: &[Complex<f32>], len: usize) {
             info!("dump_debug_fc32: Base64 encoding failed: {:?}", e);
         }
     }
+}
+
+pub async fn set_l1_iters(iters: u32) {
+    let mut state = WIPRO_STATE.lock().await;
+    state.num_l1_iters = iters;
+    info!("L1 iters: {}", iters);
 }
