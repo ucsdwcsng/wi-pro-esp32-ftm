@@ -1,6 +1,6 @@
 use crate::ftm::{handle_ftm_notification, FtmNotification};
 use crate::timectl::get_mac_ff_time;
-use crate::wifi::{try_connect, disconnect};
+use crate::wifi::{try_connect, disconnect, sta_get_ip};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
 use embassy_time::{Duration, Instant, Timer};
@@ -200,83 +200,93 @@ pub fn get_stats() -> (u32, u32) {
     )
 }
 
-pub fn get_connected_bssid() -> Option<[u8; 6]> {
-    unsafe {
-        let mut ap_info: esp_idf_sys::wifi_ap_record_t = core::mem::zeroed();
-        let result = esp_idf_sys::esp_wifi_sta_get_ap_info(&mut ap_info as *mut _);
-        
-        if result == esp_idf_sys::ESP_OK {
-            Some(ap_info.bssid)
-        } else {
-            None
-        }
-    }
-}
-
 #[embassy_executor::task]
 pub async fn beacon_task() {
-    
+
     let mut socket: Option<UdpSocket> = None;
-    let mut connected = false;
-    
+    let mut bound_ip: Option<std::net::Ipv4Addr> = None;
+
     loop {
         let now = Instant::now();
         let state = BEACON_STATE.lock().await;
         let should_beacon = state.should_beacon;
         let rate = state.beacon_rate_ms;
         drop(state);
-        
-        if should_beacon {
-	    if let Some(_bssid) = get_connected_bssid() {
-            } else {
-                info!("Not connected to any AP yet");
-		try_connect();
+
+        if !should_beacon {
+            socket = None;
+            bound_ip = None;
+            Timer::at(now + Duration::from_millis(4000)).await;
+            continue;
+        }
+
+        // Require a DHCP-assigned IP on the STA netif before touching the socket.
+        // Binding to 0.0.0.0 sends the broadcast out ALL interfaces; on a dual
+        // AP+STA device each AP client gets its own pbuf copy, which exhausts the
+        // lwIP heap under load and causes ENOMEM on send_to.  Binding to the STA
+        // IP confines the broadcast to the STA netif only.
+        let sta_ip = match sta_get_ip() {
+            Some(ip) => ip,
+            None => {
+                if socket.is_some() {
+                    info!("STA lost IP, dropping beacon socket");
+                    socket = None;
+                    bound_ip = None;
+                }
+                try_connect();
                 Timer::at(now + Duration::from_millis(3000)).await;
                 continue;
             }
-            // Try to create socket if not connected
-            if !connected {
-                match UdpSocket::bind("0.0.0.0:0") {
-                    Ok(sock) => {
-                        // Set broadcast/multicast options
-                        sock.set_broadcast(true).ok();
-                        socket = Some(sock);
-                        connected = true;
-                        info!("UDP socket created for beaconing");
-                    }
-                    Err(e) => {
-                        info!("Failed to create UDP socket (not connected yet?): {:?}", e);
-                        Timer::at(now + Duration::from_millis(1000)).await;
-                        continue;
-                    }
-                }
-            }
-            
-            // Send beacon packet
-            if let Some(ref sock) = socket {
-                let beacon_data = b"BEACON";
-                // Send to broadcast address
-                match sock.send_to(beacon_data, "255.255.255.255:5000") {
-                    Ok(_) => {
-                        info!("Beacon sent via UDP");
-                    }
-                    Err(e) => {
-                        info!("Failed to send beacon: {:?}", e);
-                        // Connection lost, reset
-                        socket = None;
-                        connected = false;
-                    }
-                }
-            }
-            
-            Timer::at(now + Duration::from_millis(rate.try_into().unwrap())).await;
-        } else {
-            // Not beaconing, clean up
+        };
+
+        // Drop and rebind if the STA IP changed (e.g. DHCP renewal).
+        if bound_ip != Some(sta_ip) {
             socket = None;
-            connected = false;
-            	    
-            Timer::at(now + Duration::from_millis(4000)).await;
+            bound_ip = None;
         }
+
+        if socket.is_none() {
+            let bind_addr = std::net::SocketAddr::new(std::net::IpAddr::V4(sta_ip), 0);
+            match UdpSocket::bind(bind_addr) {
+                Ok(sock) => {
+                    sock.set_broadcast(true).ok();
+                    socket = Some(sock);
+                    bound_ip = Some(sta_ip);
+                    info!("UDP socket bound to {} for beaconing", sta_ip);
+                }
+                Err(e) => {
+                    info!("Failed to create UDP socket: {:?}", e);
+                    Timer::at(now + Duration::from_millis(5000)).await;
+                    continue;
+                }
+            }
+        }
+
+        if let Some(ref sock) = socket {
+            let beacon_data = b"BEACON";
+            match sock.send_to(beacon_data, "255.255.255.255:5000") {
+                Ok(_) => {
+                    info!("Beacon sent via UDP");
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::OutOfMemory => {
+                    // TX pbuf pool is temporarily exhausted (WiFi driver queue
+                    // backed up).  The socket is still valid — keep it and
+                    // back off long enough for queued pbufs to drain before
+                    // attempting another send.
+                    info!("Beacon send OOM, backing off to drain TX queue");
+                    Timer::after(Duration::from_millis(200)).await;
+                    continue;
+                }
+                Err(e) => {
+                    // Any other error (network down, etc.) — drop and rebind.
+                    info!("Failed to send beacon: {:?}", e);
+                    socket = None;
+                    bound_ip = None;
+                }
+            }
+        }
+
+        Timer::at(now + Duration::from_millis(rate.try_into().unwrap())).await;
     }
 }
 

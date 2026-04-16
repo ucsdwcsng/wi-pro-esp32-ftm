@@ -304,6 +304,28 @@ pub fn is_sta_connected() -> bool {
     }
 }
 
+pub fn sta_get_ip() -> Option<std::net::Ipv4Addr> {
+    unsafe {
+        let key = b"WIFI_STA_DEF\0";
+        let netif = esp_idf_sys::esp_netif_get_handle_from_ifkey(key.as_ptr() as *const _);
+        if netif.is_null() {
+            return None;
+        }
+        let mut ip_info: esp_idf_sys::esp_netif_ip_info_t = core::mem::zeroed();
+        if esp_idf_sys::esp_netif_get_ip_info(netif, &mut ip_info as *mut _) != esp_idf_sys::ESP_OK {
+            return None;
+        }
+        if ip_info.ip.addr == 0 {
+            return None;
+        }
+        // LwIP stores addr in network byte order; to_ne_bytes() on a little-endian
+        // ESP32-S3 yields octets in the correct on-wire order.
+        let b = ip_info.ip.addr.to_ne_bytes();
+        Some(std::net::Ipv4Addr::new(b[0], b[1], b[2], b[3]))
+    }
+}
+
+
 pub fn try_connect() {
     if !is_sta_connected() {
         info!("STA not connected, attempting reconnect...");

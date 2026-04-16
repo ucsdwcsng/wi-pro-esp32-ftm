@@ -22,7 +22,7 @@ pub struct WiproState {
 
 pub static WIPRO_STATE: Mutex<CriticalSectionRawMutex, WiproState> =
     Mutex::new(WiproState {
-	num_l1_iters: 6
+	num_l1_iters: 3
     });
 
 
