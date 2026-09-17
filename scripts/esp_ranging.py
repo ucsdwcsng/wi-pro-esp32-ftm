@@ -118,7 +118,7 @@ def l1_err(h):
 
 
 IDFT_MAT = np.exp(2.0j*np.pi*np.arange(128)[:,None]*np.arange(128)[None,:]/128)/np.sqrt(128)
-EXCLUDED_SUBC = np.in1d(np.arange(128),[0,1,59,60,61,62,63,64,65,66,67,68,69,127])
+EXCLUDED_SUBC = np.isin(np.arange(128),[0,1,59,60,61,62,63,64,65,66,67,68,69,127])
 ZIDX = np.logical_not(EXCLUDED_SUBC)
 def optimal_interp_edges(h, iters=20):
     eps = 0.005
